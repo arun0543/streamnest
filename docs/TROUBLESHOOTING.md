@@ -5,6 +5,7 @@
 | Symptom | Fix |
 |---|---|
 | "StreamNest needs Node.js 24 or newer" / `npm install` fails with `EBADENGINE` | Install Node 24: Windows `winget install OpenJS.NodeJS.LTS` (or `nvm install 24 && nvm use 24`); Linux/Pi `nvm install 24`. |
+| PowerShell: `npm.ps1 cannot be loaded because running scripts is disabled` | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force` once in PowerShell. |
 | Double-clicking `start-windows.bat` closes at once | Open it from a terminal to read the message; usually Node is missing or too old. |
 | `./start-linux.sh: Permission denied` | `chmod +x start-linux.sh`, or run `bash start-linux.sh`. |
 | `bad interpreter: ^M` on Linux | The script got Windows line endings. `sed -i 's/\r$//' start-linux.sh`. (`.gitattributes` keeps `.sh` as LF.) |

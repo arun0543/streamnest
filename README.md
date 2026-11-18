@@ -25,6 +25,11 @@ npm install
 npm start
 ```
 
+> **Note for PowerShell users:** If you get an error that `npm.ps1 cannot be loaded because running scripts is disabled`, run this once:
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force
+> ```
+
 **Linux / Raspberry Pi:**
 
 ```bash
