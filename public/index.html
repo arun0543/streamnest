@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamNest</title>
+<style>
+/* ── Design Tokens ── */
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #22263a;
+  --fg: #e8eaed;
+  --muted: #8b93a1;
+  --line: #2a2e3e;
+  --accent: #6c8fff;
+  --accent2: #a78bfa;
+  --ok: #4ade80;
+  --bad: #f87171;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,.45);
+  --player-h: 56px;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f2f8; --bg2: #fff; --bg3: #e8ecf5;
+    --fg: #1b1d21; --muted: #566; --line: #d4d8e8;
+    --accent: #3b5bdb; --accent2: #7c3aed;
+    color-scheme: light;
+  }
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 14px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+/* ── Header ── */
+#header {
+  height: var(--header-h);
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg2);
+  flex-shrink: 0;
+  z-index: 10;
+}
+#header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+#search { flex: 1; max-width: 340px; background: var(--bg3); border: 1px solid var(--line); border-radius: 20px; padding: 6px 14px; font: inherit; color: var(--fg); outline: none; transition: border .2s; }
+#search:focus { border-color: var(--accent); }
+#header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.icon-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; align-items: center; font-size: 20px; line-height: 1; transition: color .15s, background .15s; }
+.icon-btn:hover { color: var(--fg); background: var(--bg3); }
+#toggle-sidebar { display: none; }
+
+/* ── Layout ── */
+#body { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  transition: transform .25s;
+}
+#sidebar-top { padding: 14px 12px 8px; }
+.sidebar-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; padding: 10px 12px 4px; }
+.lib-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 8px; cursor: pointer;
+  color: var(--muted); transition: background .15s, color .15s;
+  font-size: 13.5px;
+}
+.lib-item:hover { background: var(--bg3); color: var(--fg); }
+.lib-item.active { background: var(--bg3); color: var(--accent); font-weight: 600; }
+.lib-item .li-icon { font-size: 16px; flex-shrink: 0; }
+.lib-item .li-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-item .li-badge { font-size: 11px; background: var(--bg); border-radius: 10px; padding: 1px 7px; color: var(--muted); }
+.sidebar-divider { height: 1px; background: var(--line); margin: 8px 12px; }
+.sidebar-action { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--muted); cursor: pointer; border-radius: 8px; font-size: 13px; text-decoration: none; transition: background .15s, color .15s; }
+.sidebar-action:hover { background: var(--bg3); color: var(--fg); }
+
+/* ── Main Content ── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#breadcrumb { padding: 10px 16px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; color: var(--muted); flex-shrink: 0; }
+#breadcrumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
+#breadcrumb a:hover { text-decoration: underline; }
+#breadcrumb span { color: var(--muted); }
+
+/* ── Status bar ── */
+#statusbar { padding: 0 16px 8px; font-size: 12px; color: var(--muted); flex-shrink: 0; min-height: 24px; }
+
+/* ── File Grid / List ── */
+#content { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+#file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+#file-grid.list-mode { display: flex; flex-direction: column; gap: 2px; }
+
+/* Grid card */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .15s, transform .12s, box-shadow .12s;
+  display: flex; flex-direction: column;
+  position: relative;
+}
+.card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+.card.playing { border-color: var(--accent); }
+.card-thumb {
+  aspect-ratio: 16/10;
+  background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  flex-shrink: 0;
+}
+.card-info { padding: 8px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.card-name { font-size: 12.5px; font-weight: 500; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.card-meta { font-size: 11px; color: var(--muted); }
+.card-more { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); border: none; color: #fff; border-radius: 6px; padding: 2px 7px; cursor: pointer; font-size: 13px; opacity: 0; transition: opacity .15s; }
+.card:hover .card-more { opacity: 1; }
+
+/* List row */
+.row-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.row-item:hover { background: var(--bg2); border-color: var(--line); }
+.row-item.playing { background: var(--bg3); border-color: var(--accent); }
+.row-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+.row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.row-where { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.row-size { font-size: 12px; color: var(--muted); flex-shrink: 0; min-width: 60px; text-align: right; }
+.row-more { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; flex-shrink: 0; transition: color .12s, border-color .12s; }
+.row-more:hover { color: var(--fg); border-color: var(--fg); }
+
+/* ── Now Playing Bar ── */
+#player-bar {
+  height: var(--player-h);
+  background: var(--bg2);
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  transition: height .2s;
+}
+#player-bar.hidden { height: 0; overflow: hidden; border-top-color: transparent; }
+#player-bar.video-mode { flex-direction: column; height: auto; padding: 0; border-top: none; }
+#player-info { flex: 1; overflow: hidden; }
+#player-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#player-lib { font-size: 11px; color: var(--muted); }
+#audio-el { flex: 2; min-width: 0; height: 36px; }
+#video-wrap { display: none; width: 100%; background: #000; }
+#video-el { width: 100%; max-height: 55vh; display: block; }
+#player-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 6px; border-radius: 6px; flex-shrink: 0; }
+#player-close:hover { color: var(--bad); }
+
+/* ── Login overlay ── */
+#login-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  align-items: center; justify-content: center;
+}
+#login-overlay.show { display: flex; }
+.login-box { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 32px; width: min(360px, 90vw); display: flex; flex-direction: column; gap: 14px; }
+.login-box h2 { font-size: 20px; }
+.login-box input { width: 100%; padding: 10px 14px; background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; color: var(--fg); font: inherit; outline: none; }
+.login-box input:focus { border-color: var(--accent); }
+.login-box button { padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+.login-box button:hover { opacity: .9; }
+#login-msg { font-size: 13px; color: var(--bad); min-height: 1.2em; }
+
+/* ── Empty state ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.empty-icon { font-size: 48px; }
+.empty a { color: var(--accent); text-decoration: none; }
+.empty a:hover { text-decoration: underline; }
+
+/* ── View toggle ── */
+#view-toggle { display: flex; gap: 2px; }
+.vt-btn { background: none; border: 1px solid var(--line); color: var(--muted); cursor: pointer; border-radius: 6px; padding: 4px 8px; font-size: 16px; line-height: 1; transition: all .12s; }
+.vt-btn.active { background: var(--bg3); color: var(--fg); border-color: var(--accent); }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  :root { --sidebar-w: 220px; }
+  #toggle-sidebar { display: flex; }
+  #sidebar { position: fixed; top: var(--header-h); left: 0; bottom: 0; z-index: 20; transform: translateX(-100%); }
+  #sidebar.open { transform: none; }
+  #sidebar-backdrop { display: none; position: fixed; inset: 0; top: var(--header-h); background: rgba(0,0,0,.5); z-index: 19; }
+  #sidebar-backdrop.show { display: block; }
+  #file-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header id="header">
+  <button class="icon-btn" id="toggle-sidebar" title="Menu">☰</button>
+  <h1>StreamNest</h1>
+  <input id="search" type="search" placeholder="Search…" aria-label="Search">
+  <div id="header-right">
+    <div id="view-toggle">
+      <button class="vt-btn active" id="vt-grid" title="Grid view">⊞</button>
+      <button class="vt-btn" id="vt-list" title="List view">≡</button>
+    </div>
+    <input type="file" id="fileUploadInput" multiple style="display:none">
+    <button class="icon-btn" id="uploadBtn" title="Upload files to this folder" style="font-size:16px;font-weight:600;gap:4px">⬆ Upload</button>
+    <a class="icon-btn" href="/admin" title="Admin">⚙</a>
+  </div>
+</header>
+
+<!-- ── Body ── -->
+<div id="body">
+  <div id="sidebar-backdrop"></div>
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div id="sidebar-top">
+      <div class="sidebar-label">Libraries</div>
+      <div id="lib-list"></div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <a class="sidebar-action" href="/admin">⚙ Admin panel</a>
+    <a class="sidebar-action" href="/guide">📖 Setup guide</a>
+  </nav>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="breadcrumb"></div>
+    <div id="statusbar"></div>
+    <div id="uploadStatus" style="display:none;margin:0 16px 8px;padding:8px 12px;background:rgba(79,156,255,0.15);border:1px solid var(--accent);border-radius:8px;font-size:13px;align-items:center;gap:10px">
+      <span id="uploadStatusText" style="flex:1"></span>
+      <span id="uploadProgress" style="font-weight:600"></span>
+    </div>
+    <div id="content">
+      <div id="file-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Player Bar ── -->
+<div id="player-bar" class="hidden">
+  <div id="video-wrap"><video id="video-el" controls playsinline></video></div>
+  <div id="player-info">
+    <div id="player-title"></div>
+    <div id="player-lib"></div>
+  </div>
+  <audio id="audio-el" controls></audio>
+  <button id="player-close" title="Close player">✕</button>
+</div>
+
+<!-- ── Login overlay ── -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div style="font-size:36px;text-align:center">🎬</div>
+    <h2 style="text-align:center">StreamNest</h2>
+    <form id="login-form">
+      <input id="pw" type="password" autocomplete="current-password" placeholder="Password" required>
+      <div style="height:8px"></div>
+      <button type="submit">Sign in</button>
+    </form>
+    <div id="login-msg"></div>
+  </div>
+</div>
+
+<script src="/assets/qrcode.js"></script>
+<script src="/assets/share.js"></script>
+<script>
+"use strict";
+
+/* ── State ── */
+const $ = id => document.getElementById(id);
+const ICON_LIB = { local: "💽", smb: "🗄️", ftp: "🌐" };
+const AUDIO_RE = /\.(mp3|m4a|aac|flac|wav|ogg|opus|oga)$/i;
+const VIDEO_RE = /\.(mp4|m4v|webm|mkv|mov|avi)$/i;
+const MEDIA_RE = /\.(mp4|m4v|webm|mkv|mov|avi|mp3|m4a|aac|flac|wav|ogg|opus|oga)$/i;
+
+let libs = [], curLib = null, curDir = "", entries = [];
+let playing = null, playingLib = null;
+let viewMode = "grid"; // "grid" | "list"
+let searchTimer = null;
+
+/* ── Utils ── */
+function fmtSize(n) {
+  if (n == null) return "";
+  const u = ["B","KB","MB","GB"]; let i = 0;
+  while (n >= 1024 && i < 3) { n /= 1024; i++; }
+  return n.toFixed(i ? 1 : 0) + " " + u[i];
+}
+function streamUrl(lib, path) {
+  return "/api/stream?lib=" + encodeURIComponent(lib) + "&path=" + encodeURIComponent(path);
+}
+function mediaIcon(name) {
+  if (VIDEO_RE.test(name)) return "🎬";
+  if (AUDIO_RE.test(name)) return "🎵";
+  return "📄";
+}
+
+/* ── Login ── */
+function showLogin(msg) {
+  $("login-overlay").classList.add("show");
+  $("login-msg").textContent = msg || "";
+}
+function hideLogin() { $("login-overlay").classList.remove("show"); }
+
+$("login-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const r = await fetch("/api/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: $("pw").value })
+  });
+  $("pw").value = "";
+  if (r.ok) { hideLogin(); loadLibs(); }
+  else $("login-msg").textContent = r.status === 429 ? "Too many attempts – wait a minute." : "Wrong password.";
+});
+
+/* ── Sidebar ── */
+function buildSidebar() {
+  const list = $("lib-list");
+  list.textContent = "";
+
+  if (libs.length > 1) {
+    const all = makeSidebarItem("🔎", "All libraries", "all");
+    list.appendChild(all);
+  }
+  for (const l of libs) {
+    list.appendChild(makeSidebarItem(ICON_LIB[l.kind] || "📁", l.name, l.id, l.status !== "online"));
+  }
+  updateSidebarActive();
+}
+
+function makeSidebarItem(icon, name, id, unreachable) {
+  const el = document.createElement("div");
+  el.className = "lib-item";
+  el.dataset.lid = id;
+  el.innerHTML = `<span class="li-icon">${icon}</span><span class="li-name">${name}</span>`;
+  if (unreachable) {
+    const b = document.createElement("span");
+    b.className = "li-badge"; b.textContent = "⚠";
+    el.appendChild(b);
+  }
+  el.onclick = () => { curLib = id; $("search").value = ""; updateSidebarActive(); openLib(); closeSidebar(); };
+  return el;
+}
+
+function updateSidebarActive() {
+  document.querySelectorAll(".lib-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.lid === curLib);
+  });
+}
+
+/* ── Mobile sidebar toggle ── */
+$("toggle-sidebar").onclick = () => {
+  $("sidebar").classList.toggle("open");
+  $("sidebar-backdrop").classList.toggle("show");
+};
+$("sidebar-backdrop").onclick = closeSidebar;
+function closeSidebar() {
+  $("sidebar").classList.remove("open");
+  $("sidebar-backdrop").classList.remove("show");
+}
+
+/* ── Load libraries ── */
+async function loadLibs() {
+  const s = await (await fetch("/api/session")).json();
+  if (!s.authenticated) { showLogin(s.setupRequired ? 'No password set – run "npm run set-password" on the server.' : ""); return; }
+  libs = await (await fetch("/api/libraries")).json();
+  if (!libs.length) {
+    setStatus("No libraries yet. <a href='/admin'>Add folders in Admin ↗</a>");
+    buildSidebar(); renderEmpty("No libraries yet", "Head to <a href='/admin'>Admin</a> to add your media folders."); return;
+  }
+  curLib = libs.length > 1 ? "all" : libs[0].id;
+  buildSidebar();
+  await openLib();
+}
+
+/* ── Open library / browse ── */
+async function openLib() {
+  updateSidebarActive();
+  if (curLib === "all") {
+    curDir = ""; entries = [];
+    setStatus("Type to search across all libraries");
+    setBreadcrumb([]);
+    renderGrid();
+    return;
+  }
+  await browse("");
+}
+
+async function browse(path) {
+  const r = await fetch("/api/browse?lib=" + encodeURIComponent(curLib) + "&path=" + encodeURIComponent(path));
+  if (!r.ok) { setStatus("Cannot open folder (" + r.status + ")"); return; }
+  const data = await r.json();
+  curDir = data.path;
+  entries = data.entries.map(e => ({ ...e, lib: curLib }));
+  setBreadcrumb(curDir ? curDir.split("/") : []);
+  setStatus("");
+  renderGrid();
+}
+
+/* ── Search ── */
+$("search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  if (curLib !== "all") { renderGrid(); return; }
+  const q = $("search").value.trim();
+  if (!q) { entries = []; renderGrid(); setStatus("Type to search across all libraries"); return; }
+  searchTimer = setTimeout(runSearch, 250);
+});
+
+async function runSearch() {
+  const q = $("search").value.trim();
+  if (!q) { entries = []; renderGrid(); return; }
+  const r = await fetch("/api/search?lib=all&q=" + encodeURIComponent(q));
+  if (!r.ok) return;
+  const data = await r.json();
+  setStatus(data.indexing ? "Still indexing some libraries…" : (data.results.length ? data.results.length + " result(s)" : "No matches"));
+  entries = data.results.map(h => ({ name: h.name, path: h.path, type: h.type, lib: h.lib, where: h.libName }));
+  renderGrid();
+}
+
+/* ── Breadcrumb ── */
+function setBreadcrumb(parts) {
+  const bc = $("breadcrumb");
+  bc.textContent = "";
+  const home = document.createElement("a");
+  home.textContent = curLib === "all" ? "🔎 All" : (libs.find(l => l.id === curLib)?.name || "Home");
+  home.onclick = () => openLib();
+  bc.appendChild(home);
+  parts.forEach((seg, i) => {
+    const sep = document.createElement("span"); sep.textContent = " › ";
+    const a = document.createElement("a"); a.textContent = seg;
+    a.onclick = () => { const p = parts.slice(0, i + 1).join("/"); browse(p); };
+    bc.append(sep, a);
+  });
+}
+
+function setStatus(html) { $("statusbar").innerHTML = html; }
+
+/* ── Render ── */
+function renderGrid() {
+  const grid = $("file-grid");
+  grid.textContent = "";
+  grid.className = viewMode === "grid" ? "" : "list-mode";
+
+  const q = $("search").value.toLowerCase();
+  const isAll = curLib === "all";
+
+  const filtered = entries.filter(e => {
+    if (q && !e.name.toLowerCase().includes(q)) return false;
+    if (e.type === "file" && !MEDIA_RE.test(e.name)) return false;
+    return true;
+  });
+
+  if (!filtered.length && !isAll) {
+    renderEmpty("Nothing here", "This folder has no playable media files.");
+    return;
+  }
+  if (!filtered.length && isAll && $("search").value.trim()) {
+    renderEmpty("No results", "Try a different search term.");
+    return;
+  }
+  if (!filtered.length) return;
+
+  for (const e of filtered) {
+    grid.appendChild(viewMode === "grid" ? makeCard(e) : makeRow(e));
+  }
+}
+
+function makeCard(e) {
+  const isDir = e.type === "dir";
+  const isPlaying = !isDir && e.path === playing && (e.lib || curLib) === playingLib;
+  const card = document.createElement("div");
+  card.className = "card" + (isPlaying ? " playing" : "");
+
+  const thumb = document.createElement("div");
+  thumb.className = "card-thumb";
+  thumb.textContent = isDir ? "📁" : mediaIcon(e.name);
+
+  const info = document.createElement("div");
+  info.className = "card-info";
+  const name = document.createElement("div");
+  name.className = "card-name"; name.textContent = (isPlaying ? "▶ " : "") + e.name;
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+  meta.textContent = isDir ? "Folder" : (e.where ? e.where : fmtSize(e.size));
+  info.append(name, meta);
+  card.append(thumb, info);
+
+  if (!isDir) {
+    const more = document.createElement("button");
+    more.className = "card-more"; more.textContent = "⋯"; more.title = "Share / copy link";
+    more.onclick = ev => { ev.stopPropagation(); StreamShare.open({ lib: e.lib || curLib, path: e.path, name: e.name, isDir: false }); };
+    card.appendChild(more);
+  }
+
+  card.onclick = () => {
+    if (isDir) { curLib = e.lib || curLib; updateSidebarActive(); browse(e.path); }
+    else play(e);
+  };
+  return card;
+}
+
+function makeRow(e) {
+  const isDir = e.type === "dir";
+  const isPlaying = !isDir && e.path === playing && (e.lib || curLib) === playingLib;
+  const row = document.createElement("div");
+  row.className = "row-item" + (isPlaying ? " playing" : "");
+
+  const icon = document.createElement("div");
+  icon.className = "row-icon";
+  icon.textContent = isDir ? "📁" : (isPlaying ? "▶" : mediaIcon(e.name));
+
+  const name = document.createElement("div");
+  name.className = "row-name";
+  name.textContent = e.name;
+
+  row.append(icon, name);
+
+  if (e.where) {
+    const where = document.createElement("div");
+    where.className = "row-where"; where.textContent = e.where + " / " + e.path;
+    row.appendChild(where);
+  } else {
+    const size = document.createElement("div");
+    size.className = "row-size"; size.textContent = isDir ? "" : fmtSize(e.size);
+    row.appendChild(size);
+  }
+
+  if (!isDir) {
+    const more = document.createElement("button");
+    more.className = "row-more"; more.textContent = "⋯"; more.title = "Share";
+    more.onclick = ev => { ev.stopPropagation(); StreamShare.open({ lib: e.lib || curLib, path: e.path, name: e.name, isDir: false }); };
+    row.appendChild(more);
+  }
+
+  row.onclick = () => {
+    if (isDir) { curLib = e.lib || curLib; updateSidebarActive(); browse(e.path); }
+    else play(e);
+  };
+  return row;
+}
+
+function renderEmpty(title, msg) {
+  const grid = $("file-grid");
+  grid.textContent = "";
+  const div = document.createElement("div");
+  div.className = "empty";
+  div.innerHTML = `<div class="empty-icon">🎬</div><strong>${title}</strong><p>${msg}</p>`;
+  grid.appendChild(div);
+}
+
+/* ── Player ── */
+function play(e) {
+  playing = e.path;
+  playingLib = e.lib || curLib;
+  const url = streamUrl(playingLib, e.path);
+  const isAudio = AUDIO_RE.test(e.name);
+  const bar = $("player-bar");
+
+  $("player-title").textContent = e.name;
+  $("player-lib").textContent = libs.find(l => l.id === playingLib)?.name || "";
+
+  if (isAudio) {
+    $("video-wrap").style.display = "none";
+    $("audio-el").style.display = "";
+    $("video-el").pause(); $("video-el").src = "";
+    bar.classList.remove("video-mode");
+    bar.style.height = "";
+    $("audio-el").src = url;
+    $("audio-el").play().catch(() => {});
+  } else {
+    $("audio-el").style.display = "none";
+    $("audio-el").pause(); $("audio-el").src = "";
+    $("video-wrap").style.display = "block";
+    bar.classList.add("video-mode");
+    $("video-el").src = url;
+    $("video-el").play().catch(() => {});
+  }
+  bar.classList.remove("hidden");
+  renderGrid(); // update playing highlight
+}
+
+$("player-close").onclick = () => {
+  $("audio-el").pause(); $("audio-el").src = "";
+  $("video-el").pause(); $("video-el").src = "";
+  playing = null; playingLib = null;
+  $("player-bar").classList.add("hidden");
+  renderGrid();
+};
+
+// Auto-advance
+function setupAutoAdvance(el) {
+  el.addEventListener("ended", () => {
+    const files = entries.filter(e => e.type === "file" && MEDIA_RE.test(e.name));
+    const i = files.findIndex(e => e.path === playing && (e.lib || curLib) === playingLib);
+    if (i >= 0 && files[i + 1]) play(files[i + 1]);
+  });
+}
+setupAutoAdvance($("audio-el"));
+setupAutoAdvance($("video-el"));
+
+/* ── View toggle ── */
+$("vt-grid").onclick = () => { viewMode = "grid"; $("vt-grid").classList.add("active"); $("vt-list").classList.remove("active"); renderGrid(); };
+$("vt-list").onclick = () => { viewMode = "list"; $("vt-list").classList.add("active"); $("vt-grid").classList.remove("active"); renderGrid(); };
+
+/* ── Boot ── */
+
+/* ── File Upload Support ── */
+const uploadInput = $("fileUploadInput");
+const uploadBtn = $("uploadBtn");
+
+uploadBtn.onclick = () => {
+  if (curLib === "all" || !curLib) {
+    alert("Please select a specific library folder first to upload files into it.");
+    return;
+  }
+  uploadInput.click();
+};
+
+uploadInput.onchange = async () => {
+  const files = Array.from(uploadInput.files || []);
+  if (!files.length) return;
+  await handleFileUpload(files);
+  uploadInput.value = "";
+};
+
+// Drag and drop upload onto content area
+const contentArea = $("content");
+["dragenter", "dragover"].forEach(evt => {
+  contentArea.addEventListener(evt, e => {
+    e.preventDefault();
+    e.stopPropagation();
+    contentArea.style.outline = "2px dashed var(--accent)";
+  });
+});
+["dragleave", "drop"].forEach(evt => {
+  contentArea.addEventListener(evt, e => {
+    e.preventDefault();
+    e.stopPropagation();
+    contentArea.style.outline = "";
+  });
+});
+contentArea.addEventListener("drop", async e => {
+  if (curLib === "all" || !curLib) {
+    alert("Please select a specific library folder first to upload files into it.");
+    return;
+  }
+  const files = Array.from(e.dataTransfer?.files || []);
+  if (files.length) await handleFileUpload(files);
+});
+
+async function handleFileUpload(files) {
+  const statusBox = $("uploadStatus");
+  const statusText = $("uploadStatusText");
+  const progText = $("uploadProgress");
+  statusBox.style.display = "flex";
+
+  let successCount = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    statusText.textContent = `Uploading ${i + 1} of ${files.length}: ${f.name} (${fmtSize(f.size)})`;
+    progText.textContent = `${Math.round(((i) / files.length) * 100)}%`;
+
+    try {
+      const url = `/api/upload?lib=${encodeURIComponent(curLib)}&path=${encodeURIComponent(curDir)}&name=${encodeURIComponent(f.name)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: f
+      });
+
+      if (res.ok) successCount++;
+      else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Failed to upload ${f.name}: ${err.error || res.statusText}`);
+      }
+    } catch (err) {
+      alert(`Network error uploading ${f.name}`);
+    }
+  }
+
+  progText.textContent = "100%";
+  statusText.textContent = `Uploaded ${successCount} file(s) successfully!`;
+  setTimeout(() => {
+    statusBox.style.display = "none";
+  }, 3000);
+
+  // Refresh current folder view
+  await browse(curDir);
+}
+
+loadLibs();
+</script>
+</body>
+</html>

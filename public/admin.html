@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamNest Admin</title>
+<style>
+  :root { color-scheme: dark light; --bg:#14161a; --fg:#e8eaed; --muted:#8b93a1; --line:#2a2e36; --accent:#4f9cff; --bad:#e55; --ok:#4c4; }
+  @media (prefers-color-scheme: light) { :root { --bg:#fafafa; --fg:#1b1d21; --muted:#667; --line:#dde; } }
+  body { margin:0; font:15px system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; gap:12px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0; flex:1; background:linear-gradient(135deg,#4f9cff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
+  a { color:var(--accent); }
+  main { max-width:1000px; margin:0 auto; padding:14px; }
+  button, input, select, textarea { font:inherit; color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; } button:hover { background:rgba(127,127,127,.15); } button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; margin:10px 0 22px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.path { word-break:break-all; color:var(--muted); font-size:13px; }
+  td.actions button { margin:0 4px 4px 0; padding:3px 8px; font-size:13px; }
+  .online { color:var(--ok); } .unreachable { color:var(--bad); }
+  .scroll { overflow-x:auto; }
+  dialog { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:10px; width:min(640px, 94vw); padding:16px; }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; } .tabs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #picker { border:1px solid var(--line); border-radius:6px; max-height:260px; overflow:auto; }
+  #picker label, #picker .up { display:flex; gap:8px; align-items:center; padding:5px 8px; border-bottom:1px solid var(--line); }
+  #picker .name { cursor:pointer; flex:1; } #picker .name:hover { color:var(--accent); }
+  textarea { width:100%; box-sizing:border-box; height:90px; margin-top:8px; }
+  .msg { min-height:1.3em; color:var(--muted); white-space:pre-wrap; font-size:13px; }
+  #login { max-width:320px; margin:50px auto; }
+  #login input { width:100%; box-sizing:border-box; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .grid label { display:flex; flex-direction:column; gap:3px; font-size:13px; color:var(--muted); } .grid input, .grid select { color:var(--fg); }
+  @media (max-width:520px) { .grid { grid-template-columns:1fr; } }
+  .row { display:flex; gap:8px; margin-top:12px; justify-content:flex-end; }
+  /* Server info bar */
+  #srvbar { display:none; gap:14px; flex-wrap:wrap; align-items:center; padding:8px 14px; background:rgba(79,156,255,.07); border-bottom:1px solid var(--line); font-size:13px; }
+  .srvtag { color:var(--muted); }
+  .srvtag strong { color:var(--fg); }
+  .srvtag a { color:var(--accent); text-decoration:none; }
+  .srvtag a:hover { text-decoration:underline; }
+  /* DB info box */
+  .infobox { background:rgba(127,127,127,.06); border:1px solid var(--line); border-radius:8px; padding:14px; font-size:13px; line-height:1.9; margin-bottom:22px; }
+  code { background:rgba(127,127,127,.15); padding:1px 6px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>StreamNest Admin</h1>
+  <a href="/">Player</a>
+  <button id="logout" hidden>Log out</button>
+</header>
+
+<!-- ── Server info & Network Address Table ── -->
+<div id="srvbar" style="display:none;flex-direction:column;gap:10px;padding:12px 16px;background:rgba(79,156,255,.06);border-bottom:1px solid var(--line);font-size:13px">
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;width:100%">
+    <span>Host: <strong id="si-host" style="color:var(--accent)"></strong></span>
+    <span>Storage: <strong id="si-db"></strong></span>
+    <span>Node <strong id="si-node"></strong></span>
+    <button type="button" id="toggleNetTableBtn" onclick="toggleNetTable()" style="margin-left:auto;padding:3px 10px;font-size:12px;border:1px solid var(--line);background:var(--bg2,#1e2130);border-radius:6px;cursor:pointer">
+      🌐 View Network Addresses &amp; Device Guide
+    </button>
+  </div>
+
+  <div id="netAddressGuide" style="display:none;margin-top:4px;border-top:1px solid var(--line);padding-top:10px;overflow-x:auto">
+    <div style="font-weight:600;margin-bottom:6px;color:var(--fg)">Available Connection Addresses &amp; Where to Use Them:</div>
+    <table style="width:100%;margin:0 0 4px;font-size:12px;border-collapse:collapse">
+      <thead>
+        <tr style="background:rgba(127,127,127,0.08)">
+          <th style="padding:6px 8px;border:1px solid var(--line)">Network / Interface</th>
+          <th style="padding:6px 8px;border:1px solid var(--line)">Direct Clickable Link</th>
+          <th style="padding:6px 8px;border:1px solid var(--line)">What Device Should Use This?</th>
+        </tr>
+      </thead>
+      <tbody id="netTableBody">
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Login ── -->
+<div id="login" hidden>
+  <form id="loginForm">
+    <h2>Sign in</h2>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Admin password" required>
+    <p id="loginMsg" class="msg"></p>
+    <button class="primary" type="submit">Sign in</button>
+  </form>
+</div>
+
+<main id="app" hidden>
+
+  <!-- Libraries -->
+  <div style="display:flex;gap:8px;align-items:center">
+    <h2 style="flex:1;margin:0">Libraries</h2>
+    <button class="primary" id="addBtn">Add folders&hellip;</button>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>Name</th><th>Type</th><th>Path</th><th>Status</th><th>Files</th><th>Actions</th></tr></thead>
+    <tbody id="libs"></tbody>
+  </table></div>
+  <p id="libMsg" class="msg"></p>
+
+  <!-- Share links -->
+  <div style="display:flex;gap:8px;align-items:center">
+    <h2 style="flex:1;margin:0">Share links</h2>
+    <button id="revokeAll">Revoke all</button>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>File / folder</th><th>Mode</th><th>Expires</th><th>State</th><th></th></tr></thead>
+    <tbody id="shares"></tbody>
+  </table></div>
+
+  
+  <!-- Built-in Network File Sharing (No root/sudo needed) -->
+  <h2 style="margin:24px 0 10px">Built-in Network File Sharing (FTP / Network Drive)</h2>
+  <div class="infobox" style="line-height:1.8">
+    <div style="margin-bottom:6px">
+      <strong>Status:</strong> <span style="color:var(--ok);font-weight:600">● Active on port 2121</span>
+    </div>
+    <div style="color:var(--fg);margin-bottom:8px">
+      StreamNest has a built-in network file server running directly inside Node.js. Other computers, phones, and VLC can connect directly over Wi-Fi without needing Samba installed!
+    </div>
+    <div style="background:rgba(0,0,0,0.25);padding:10px;border-radius:6px;font-family:monospace;font-size:13px;margin:8px 0">
+      <div><strong>Addresses:</strong> ftp://192.168.0.222:2121  or  ftp://192.168.31.84:2121</div>
+      <div><strong>Username:</strong> streamnest</div>
+      <div><strong>Password:</strong> 123</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">
+      <strong>Windows Explorer:</strong> Open <code>This PC</code> &gt; Right-click &gt; <em>Add a network location</em> &gt; enter <code>ftp://192.168.0.222:2121</code><br>
+      <strong>VLC / Mobile File Manager:</strong> Select FTP / Network &gt; connect with the credentials above.
+    </div>
+  </div>
+
+  <!-- Storage backend -->
+  <h2 style="margin:24px 0 10px">Storage backend</h2>
+  <div class="infobox">
+    <div style="margin-bottom:6px"><strong>Active backend:</strong> <span id="db-current" style="color:var(--accent)">loading&hellip;</span></div>
+    <div style="color:var(--muted)">
+      Set the <code>STREAMNEST_DB</code> environment variable before starting the server:<br>
+      <code>STREAMNEST_DB=file</code> &mdash; default &mdash; JSON files in <code>data/</code><br>
+      <code>STREAMNEST_DB=sqlite</code> &mdash; SQLite at <code>data/streamnest.db</code><br>
+      <code>STREAMNEST_DB=sqlite:./custom.db</code> &mdash; SQLite custom path<br>
+      <code>STREAMNEST_DB=postgres://user:pass@localhost/dbname</code> &mdash; PostgreSQL<br><br>
+      Example: <code>PORT=8090 STREAMNEST_DB=sqlite npm start</code>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Add folders dialog ── -->
+<dialog id="dlg">
+  <div class="tabs">
+    <button class="active" data-tab="local">Local</button>
+    <button data-tab="smb">SMB</button>
+    <button data-tab="ftp">FTP</button>
+  </div>
+  <div id="tab-smb" hidden>
+    <p class="msg">Native SMB client (SMB 2.0.2/2.1, NTLM). If your server needs SMB3 signing/encryption (Windows 11 24H2 defaults), use a UNC path or mount the share and add it as a Local folder instead. See docs/SMB.md.</p>
+    <div class="grid">
+      <label>Name<input id="smbName" placeholder="NAS Movies"></label>
+      <label>Host / IP<input id="smbHost" placeholder="192.168.1.20 or nas" oninput="autoFillSmbPort()"></label>
+      <label>Share<input id="smbShare" placeholder="Media"></label>
+      <label>Path in share<input id="smbPath" placeholder="Movies (optional)"></label>
+      <label>Username<input id="smbUser" autocomplete="off"></label>
+      <label>Password<input id="smbPass" type="password" autocomplete="new-password"></label>
+      <label>Domain (optional)<input id="smbDomain"></label>
+      <label style="flex-direction:column;gap:4px">
+        Port
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="smbPort" type="number" placeholder="445" min="1" max="65535" style="flex:1">
+          <button type="button" id="smbPortAuto" onclick="setSmbPortAuto()" title="Reset to auto-detect (port 445)" style="padding:5px 10px;font-size:12px;white-space:nowrap">Auto</button>
+        </div>
+        <span style="font-size:11px;color:var(--muted)">Auto = 445 (standard SMB). Change only if your NAS uses a custom port.</span>
+      </label>
+    </div>
+    <div style="margin-top:10px;padding:8px 10px;background:rgba(79,156,255,.07);border-radius:6px;font-size:12px;color:var(--muted)">
+      <strong style="color:var(--fg)">Auto-detect:</strong> Leave Port blank for automatic (445). Host is auto-resolved via DNS. The connection is tested before adding.
+    </div>
+    <div class="row" style="justify-content:flex-start;margin-top:10px"><button id="smbTest">Test connection</button><span id="smbPing" class="msg" style="margin-left:8px;align-self:center"></span></div>
+  </div>
+  <div id="tab-ftp" hidden>
+    <div class="grid">
+      <label>Name<input id="ftpName" placeholder="Seedbox"></label><label>Host<input id="ftpHost" placeholder="ftp.example.com"></label>
+      <label>Port<input id="ftpPort" type="number" placeholder="21"></label>
+      <label>Security<select id="ftpSecure"><option value="none">FTP (plain)</option><option value="explicit">FTPS explicit</option><option value="implicit">FTPS implicit</option></select></label>
+      <label>Username<input id="ftpUser" autocomplete="off" placeholder="anonymous"></label><label>Password<input id="ftpPass" type="password" autocomplete="new-password"></label>
+      <label>Base path<input id="ftpBase" placeholder="/"></label>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input id="ftpSelf" type="checkbox" style="width:auto"> Allow self-signed certificate</label>
+    </div>
+    <div class="row" style="justify-content:flex-start"><button id="ftpTest">Test connection</button></div>
+  </div>
+  <div id="tab-local">
+    <p class="msg" style="margin-bottom:6px">Select a user home folder below, browse into it, and tick the folders you want to add. Or paste paths directly.</p>
+    <div id="pickerPath" class="msg"></div>
+    <div id="picker"></div>
+    <p class="msg">Or paste absolute paths below, one per line:</p>
+    <textarea id="paste" placeholder="/home/arun/Movies&#10;/media/arun/HDD/Music" spellcheck="false"></textarea>
+    <p class="msg" id="ticked"></p>
+  </div>
+  <p class="msg" id="addMsg"></p>
+  <div class="row"><button id="cancel">Close</button><button class="primary" id="doAdd">Add selected</button></div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const ICON = { local: "💽 Local", smb: "🗄️ SMB", ftp: "🌐 FTP" };
+const selected = new Set();
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  if (r.status === 401) { showLogin(); throw new Error("login required"); }
+  return r;
+}
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  for (const k of kids) e.append(k);
+  return e;
+}
+function showLogin() { $("app").hidden = true; $("login").hidden = false; $("logout").hidden = true; }
+
+async function init() {
+  const s = await (await fetch("/api/session")).json();
+  if (!s.authenticated) {
+    showLogin();
+    if (s.setupRequired) $("loginMsg").textContent = 'No admin password is set. Run "npm run set-password" on the server.';
+    return;
+  }
+  $("login").hidden = true; $("app").hidden = false; $("logout").hidden = false;
+  await Promise.all([loadLibs(), loadShares(), loadServerInfo()]);
+}
+
+/* ── Server info (auto-detected IPs, DB backend, Node version) ── */
+function toggleNetTable() {
+  const guide = $("netAddressGuide");
+  const btn = $("toggleNetTableBtn");
+  const isHidden = guide.style.display === "none";
+  guide.style.display = isHidden ? "block" : "none";
+  btn.textContent = isHidden ? "▲ Hide Address Guide" : "🌐 View Network Addresses & Device Guide";
+}
+
+async function loadServerInfo() {
+  try {
+    const info = await (await fetch("/api/server-info")).json();
+    const bar = $("srvbar");
+    bar.style.display = "flex";
+    $("si-host").textContent = (info.hostname || "?") + ":" + info.port;
+
+    const dbLabels = { file: "JSON files", sqlite: "SQLite", postgres: "PostgreSQL" };
+    const dbName = dbLabels[info.db] || (info.db || "file");
+    $("si-db").textContent = dbName;
+    const dbCur = $("db-current");
+    if (dbCur) dbCur.textContent = dbName + (info.db && info.db !== "file" ? "" : " (default)");
+    $("si-node").textContent = info.nodeVersion;
+
+    const tbody = $("netTableBody");
+    tbody.textContent = "";
+
+    const rows = [];
+
+    // Online URL row
+    if (info.onlineUrl) {
+      rows.push({
+        label: "🌍 Public Internet (Cloudflare)",
+        url: info.onlineUrl,
+        desc: "<b>Any device anywhere!</b> Works on Mobile Data (4G/5G), outside networks, or when local Wi-Fi routing blocks local IPs."
+      });
+    }
+
+    // LAN IPs
+    (info.lanAddresses || []).forEach(a => {
+      let label = "LAN Interface";
+      let desc = "Local network connection";
+
+      if (a.ip.startsWith("192.168.0.")) {
+        label = "🔌 Wired Ethernet (Router 1)";
+        desc = "<b>Desktop, PCs, and laptops</b> connected via Ethernet cable or Router 1 Wi-Fi.";
+      } else if (a.ip.startsWith("192.168.31.")) {
+        label = "📶 Wi-Fi Adapter (Router 2)";
+        desc = "<b>Mobile phones, tablets, and Smart TVs</b> connected to Router 2 Wi-Fi.";
+      } else if (a.ip.startsWith("172.17.") || a.ip.startsWith("172.18.") || a.ip.startsWith("172.19.")) {
+        label = "🐳 Docker Internal Bridge";
+        desc = "Internal virtual container adapter. <i>(Cannot be reached by phones/external PCs - ignore)</i>";
+      }
+
+      rows.push({
+        label: label,
+        url: a.url,
+        desc: desc
+      });
+    });
+
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="padding:6px 8px;border:1px solid var(--line);font-weight:500;white-space:nowrap">${r.label}</td>
+        <td style="padding:6px 8px;border:1px solid var(--line);font-family:monospace"><a href="${r.url}" target="_blank" style="color:var(--accent);font-weight:600">${r.url}</a></td>
+        <td style="padding:6px 8px;border:1px solid var(--line);color:var(--fg)">${r.desc}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (rows.length > 2) {
+      $("netAddressGuide").style.display = "block";
+      $("toggleNetTableBtn").textContent = "▲ Hide Address Guide";
+    }
+
+  } catch (e) {
+    console.warn("server-info failed:", e);
+  }
+}
+
+$("loginForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: $("pw").value }) });
+  $("pw").value = "";
+  if (r.ok) init(); else $("loginMsg").textContent = r.status === 429 ? "Too many attempts. Wait a minute." : "Wrong password.";
+});
+$("logout").onclick = async () => { await fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); init(); };
+
+async function loadLibs() {
+  const libs = await (await api("/api/admin/libraries")).json();
+  const tb = $("libs"); tb.textContent = "";
+  if (!libs.length) tb.append(el("tr", {}, el("td", { colSpan: 6, textContent: "No libraries yet. Click \u201cAdd folders\u2026\u201d." })));
+  for (const l of libs) {
+    const act = el("td", { className: "actions" });
+    const btn = (label, fn) => { const b = el("button", { textContent: label }); b.onclick = () => fn(b); act.append(b); };
+    btn("Rename", async () => { const n = prompt("New name", l.name); if (n && n.trim()) { await api("/api/admin/libraries/rename", { id: l.id, name: n }); loadLibs(); } });
+    btn("Rescan", async (b) => { b.disabled = true; b.textContent = "Scanning\u2026"; await api("/api/admin/libraries/rescan", { id: l.id }); loadLibs(); });
+    btn("Test", async (b) => { b.disabled = true; const r = await (await api("/api/admin/libraries/test", { id: l.id })).json(); b.disabled = false; $("libMsg").textContent = l.name + ": " + (r.ok ? "connection OK" : "FAILED \u2013 " + r.error); });
+    btn("Remove", async () => { if (confirm("Remove \u201c" + l.name + "\u201d from StreamNest? Your files are not touched.")) { await api("/api/admin/libraries/remove", { ids: [l.id] }); loadLibs(); } });
+    const count = l.scanning ? "scanning\u2026" : l.fileCount == null ? "\u2013" : l.fileCount + (l.truncated ? "+" : "");
+    tb.append(el("tr", {},
+      el("td", { textContent: l.name }), el("td", { textContent: ICON[l.kind] || l.kind }),
+      el("td", { className: "path", textContent: l.path }),
+      el("td", { className: l.status, textContent: l.status }), el("td", { textContent: count }), act));
+  }
+}
+
+async function loadShares() {
+  const list = await (await api("/api/admin/shares")).json();
+  const tb = $("shares"); tb.textContent = "";
+  if (!list.length) tb.append(el("tr", {}, el("td", { colSpan: 5, textContent: "No share links yet." })));
+  const now = Date.now();
+  for (const s of list) {
+    const state = s.revoked ? "revoked" : s.exp && s.exp < now ? "expired" : "active";
+    const b = el("button", { textContent: "Revoke", disabled: state !== "active" });
+    b.onclick = async () => { await api("/api/admin/shares/revoke", { jti: s.jti }); loadShares(); };
+    tb.append(el("tr", {}, el("td", { className: "path", textContent: s.path || "(library root)" }), el("td", { textContent: s.mode }),
+      el("td", { textContent: s.exp ? new Date(s.exp).toLocaleString() : "never" }), el("td", { textContent: state }), el("td", {}, b)));
+  }
+}
+$("revokeAll").onclick = async () => { if (confirm("Revoke every share link?")) { await api("/api/admin/shares/revoke", { all: true }); loadShares(); } };
+
+/* ── Folder picker (shows system user home dirs at root) ── */
+async function browse(p) {
+  const r = await api("/api/admin/fs?path=" + encodeURIComponent(p));
+  const box = $("picker"); box.textContent = "";
+  if (!r.ok) { $("addMsg").textContent = "Cannot open that folder."; return; }
+  const d = await r.json();
+  $("pickerPath").textContent = d.path ? ("📂 Current: " + d.path) : "Choose a user home folder or mount point:";
+  
+  if (d.path) {
+    const upRow = el("div", { className: "up", style: "display:flex;align-items:center;padding:6px 10px;gap:8px;border-bottom:1px solid var(--line)" });
+    
+    // Button to select the currently opened folder directly
+    const curCb = el("input", { type: "checkbox", checked: selected.has(d.path), style: "margin:0;cursor:pointer" });
+    curCb.onchange = (e) => {
+      curCb.checked ? selected.add(d.path) : selected.delete(d.path);
+      updateTicked();
+    };
+    
+    const curLabel = el("span", { style: "font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;flex:1", textContent: "✔ Select this folder (" + (d.path.split("/").pop() || d.path) + ")" });
+    curLabel.onclick = () => {
+      curCb.checked = !curCb.checked;
+      curCb.checked ? selected.add(d.path) : selected.delete(d.path);
+      updateTicked();
+    };
+
+    const upBtn = el("button", { type: "button", style: "margin-left:auto;padding:2px 8px;font-size:12px", textContent: "⬆ Up" });
+    upBtn.onclick = () => browse(d.parent || "");
+
+    upRow.append(curCb, curLabel, upBtn);
+    box.append(upRow);
+  }
+
+  for (const dir of d.dirs) {
+    const item = el("div", { style: "display:flex;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line);gap:8px" });
+    
+    const cb = el("input", { type: "checkbox", checked: selected.has(dir.path), style: "margin:0;cursor:pointer" });
+    cb.onchange = () => {
+      cb.checked ? selected.add(dir.path) : selected.delete(dir.path);
+      updateTicked();
+    };
+
+    const name = el("span", { 
+      className: "name", 
+      style: "cursor:pointer;flex:1;padding:2px 0", 
+      textContent: "📁 " + dir.name 
+    });
+    // Clicking on folder name ONLY opens/navigates into it, does NOT tick the checkbox!
+    name.onclick = (e) => {
+      e.stopPropagation();
+      browse(dir.path);
+    };
+
+    item.append(cb, name);
+    box.append(item);
+  }
+
+  if (!d.dirs.length) box.append(el("div", { className: "up msg", style: "padding:8px", textContent: "No sub-folders inside" }));
+}
+function updateTicked() { $("ticked").textContent = selected.size ? selected.size + " folder(s) selected" : ""; }
+
+let tab = "local";
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
+  for (const t of ["local", "smb", "ftp"]) $(t === "local" ? "tab-local" : "tab-" + t).hidden = t !== tab;
+  $("addMsg").textContent = "";
+  $("doAdd").textContent = tab === "local" ? "Add selected" : "Add library";
+});
+function remoteBody() {
+  if (tab === "smb") {
+    const portVal = parseInt($("smbPort").value, 10);
+    const port = portVal > 0 && portVal <= 65535 ? portVal : undefined; // undefined = auto (445)
+    return { kind: "smb", name: $("smbName").value, host: $("smbHost").value, share: $("smbShare").value, path: $("smbPath").value, username: $("smbUser").value, password: $("smbPass").value, domain: $("smbDomain").value, ...(port ? { port } : {}) };
+  }
+  return { kind: "ftp", name: $("ftpName").value, host: $("ftpHost").value, port: Number($("ftpPort").value) || undefined, secure: $("ftpSecure").value, username: $("ftpUser").value, password: $("ftpPass").value, basePath: $("ftpBase").value, allowSelfSigned: $("ftpSelf").checked };
+}
+
+/* SMB port auto helpers */
+function setSmbPortAuto() {
+  $("smbPort").value = "";
+  $("smbPort").placeholder = "445 (auto)";
+  $("smbPortAuto").textContent = "Auto \u2713";
+  setTimeout(() => { $("smbPortAuto").textContent = "Auto"; }, 1500);
+}
+function autoFillSmbPort() {
+  // If port is still untouched, keep it auto
+  if (!$("smbPort").value) $("smbPort").placeholder = "445 (auto)";
+}
+async function testRemote(btn) {
+  btn.disabled = true; $("addMsg").textContent = "Testing\u2026";
+  const r = await (await api("/api/admin/libraries/test-remote", remoteBody())).json();
+  btn.disabled = false;
+  $("addMsg").textContent = r.error ? r.error : r.ok ? "Connection OK" : "Failed: " + r.error;
+}
+$("smbTest").onclick = (ev) => testRemote(ev.target);
+$("ftpTest").onclick = (ev) => testRemote(ev.target);
+$("addBtn").onclick = () => { selected.clear(); updateTicked(); $("paste").value = ""; $("addMsg").textContent = ""; $("dlg").showModal(); browse(""); };
+$("cancel").onclick = () => $("dlg").close();
+$("doAdd").onclick = async () => {
+  if (tab !== "local") {
+    $("addMsg").textContent = "Testing and adding\u2026";
+    const r = await (await api("/api/admin/libraries/add-remote", remoteBody())).json();
+    if (r.error) { $("addMsg").textContent = r.error; return; }
+    for (const id of ["smbPass", "ftpPass"]) $(id).value = "";
+    $("addMsg").textContent = "Added " + r.added.name + ".";
+    loadLibs(); setTimeout(() => $("dlg").close(), 800);
+    return;
+  }
+  const typed = $("paste").value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const paths = [...new Set([...selected, ...typed])];
+  if (!paths.length) { $("addMsg").textContent = "Nothing selected."; return; }
+  const r = await (await api("/api/admin/libraries", { paths })).json();
+  if (r.error) { $("addMsg").textContent = r.error; return; }
+  let msg = "Added " + r.added.length + " folder(s).";
+  for (const s of r.skipped) msg += "\nSkipped " + s.input + ": " + s.reason;
+  $("addMsg").textContent = msg;
+  selected.clear(); updateTicked(); $("paste").value = "";
+  loadLibs();
+  if (!r.skipped.length) setTimeout(() => $("dlg").close(), 800);
+};
+init();
+</script>
+</body>
+</html>

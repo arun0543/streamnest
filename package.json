@@ -1,0 +1,35 @@
+{
+  "name": "streamnest",
+  "version": "0.1.0",
+  "description": "Cross-platform home media server (local, SMB, FTP sources)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node scripts/check-node.mjs && tsx src/server.ts",
+    "add": "tsx src/cli.ts add",
+    "list": "tsx src/cli.ts list",
+    "remove": "tsx src/cli.ts remove",
+    "smb:share": "tsx src/smb-share.ts",
+    "set-password": "tsx src/cli.ts set-password",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-force-exit \"test/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "qrcode-generator": "^2.0.4",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "basic-ftp": "^6.2.6",
+    "better-sqlite3": "^13.1.1",
+    "pg": "^8.23.1"
+  },
+  "optionalDependencies": {
+    "@awo00/smb2": "^1.1.1",
+    "ftp-srv": "^4.6.3"
+  }
+}

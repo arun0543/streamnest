@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamNest Guide</title>
+<style>
+  :root { color-scheme: dark light; --bg:#14161a; --fg:#e8eaed; --muted:#8b93a1; --line:#2a2e36; --accent:#4f9cff; --code:#0c0e11; }
+  @media (prefers-color-scheme: light) { :root { --bg:#fafafa; --fg:#1b1d21; --muted:#667; --line:#dde; --code:#eef0f4; } }
+  body { margin:0; font:16px/1.55 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  header { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; z-index:5; }
+  header b { font-size:18px; } nav a { color:var(--accent); margin-right:12px; text-decoration:none; white-space:nowrap; }
+  .os button { font:inherit; color:inherit; background:transparent; border:1px solid var(--line); padding:5px 12px; cursor:pointer; }
+  .os button:first-child { border-radius:6px 0 0 6px; } .os button:last-child { border-radius:0 6px 6px 0; }
+  .os button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  main { max-width:860px; margin:0 auto; padding:8px 16px 80px; }
+  h2 { margin-top:42px; border-bottom:1px solid var(--line); padding-bottom:6px; } h3 { margin-top:24px; }
+  .cmd { position:relative; background:var(--code); border:1px solid var(--line); border-radius:8px; margin:10px 0; }
+  .cmd pre { margin:0; padding:12px 84px 12px 12px; overflow-x:auto; font:13.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-all; }
+  .cmd button { position:absolute; top:8px; right:8px; font:inherit; font-size:13px; color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; padding:3px 10px; cursor:pointer; }
+  .vars { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; background:var(--code); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .vars label { display:flex; flex-direction:column; font-size:13px; color:var(--muted); gap:3px; }
+  .vars input { font:inherit; color:var(--fg); background:transparent; border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  .win, .lin { display:none; } body.win .win { display:block; } body.lin .lin { display:block; }
+  .note { border-left:3px solid var(--accent); padding:4px 12px; color:var(--muted); margin:12px 0; }
+  .warn { border-left-color:#e55; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:.92em; background:var(--code); padding:1px 5px; border-radius:4px; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222; color:#fff; padding:8px 16px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; }
+</style>
+</head>
+<body class="win">
+<header>
+  <b>StreamNest Guide</b>
+  <span class="os" role="group" aria-label="Operating system"><button id="osWin" class="on">Windows</button><button id="osLin">Linux / Raspberry Pi</button></span>
+  <nav><a href="#start">Start</a><a href="#folders">Folders</a><a href="#links">Links &amp; QR</a><a href="#smb">SMB</a><a href="#ftp">FTP</a><a href="#online">Online</a><a href="/">Player</a><a href="/admin">Admin</a></nav>
+</header>
+<main>
+<div class="vars" aria-label="Your values (commands below update as you type)">
+  <label>Folder (this computer)<input id="vPath" value="D:/Movies"></label>
+  <label>Second folder<input id="vPath2" value="E:/Music"></label>
+  <label>NAS / PC address<input id="vHost" value="192.168.1.20"></label>
+  <label>Share name<input id="vShare" value="Media"></label>
+  <label>Linux user (for Samba)<input id="vUser" value="alice"></label>
+  <label>FTP port<input id="vFtpPort" value="2121"></label>
+  <label>Server port<input id="vPort" value="8080"></label>
+</div>
+
+<h2 id="start">1. Start StreamNest</h2>
+<p>You need <b>Node.js 24</b> or newer. Check with <code>node -v</code>.</p>
+<div class="win"><p>Windows: install Node with <code>winget install OpenJS.NodeJS.LTS</code>, then double-click <code>start-windows.bat</code> (it installs dependencies on first run), or use any terminal:</p>
+<div class="cmd"><pre data-t="cd {{winProject}}
+npm install
+npm start"></pre></div></div>
+<div class="lin"><p>Linux / Raspberry Pi OS: install Node 24 (<code>nvm install 24</code> or NodeSource), then:</p>
+<div class="cmd"><pre data-t="cd ~/streamnest
+chmod +x start-linux.sh
+./start-linux.sh"></pre></div></div>
+<p>The terminal prints the addresses, e.g. <code>http://localhost:{{port}}</code> and <code>LAN: http://192.168.x.x:{{port}}</code>. Open the LAN address from any device on your Wi-Fi.</p>
+<h3>Set the admin password</h3>
+<div class="cmd"><pre data-t="npm run set-password"></pre></div>
+<p>Until a password is set, only the computer running StreamNest can use it. After you set one, other devices sign in with it. The password is never put in a URL.</p>
+
+<h2 id="folders">2. Add several folders</h2>
+<div class="cmd"><pre data-t="npm run add -- &quot;{{path}}&quot; &quot;{{path2}}&quot;"></pre></div>
+<div class="win"><div class="cmd"><pre data-t="npm run add -- &quot;\\{{host}}\{{share}}\Movies&quot;"></pre></div><p class="note">Windows network folders work as UNC paths when Windows can already open them (try them in Explorer first).</p></div>
+<div class="lin"><div class="cmd"><pre data-t="npm run add -- &quot;/mnt/hdd/Movies&quot; &quot;/media/{{user}}/USB/Music&quot;"></pre></div></div>
+<div class="cmd"><pre data-t="npm run list
+npm run remove -- &quot;Movies&quot;"></pre></div>
+<p>Paths that don't exist or are already added are skipped with a reason; the rest are still added. A running server picks the change up within a couple of seconds. You can also use <b><a href="/admin">/admin</a> → Add folders…</b> and tick several folders at once.</p>
+
+<h2 id="links">3. Copy link, share and QR code</h2>
+<ol>
+  <li>In the player, click <b>⋯</b> next to a file or folder.</li>
+  <li>Pick how long the link works (1 hour, 24 hours, 7 days or never) and whether it is download-only.</li>
+  <li><b>Copy link</b>, <b>Copy LAN link</b> or <b>Copy online link</b> (only while online mode runs). It works over plain <code>http://192.168…</code> too.</li>
+  <li><b>Open in VLC</b> shows the raw stream address. In VLC: <i>Media → Open Network Stream</i>, paste it.</li>
+  <li>Scan the <b>QR code</b> with a phone on the same network.</li>
+</ol>
+<p>Share links need no login. Revoke one or all of them in <a href="/admin">/admin</a>. Expired, tampered or revoked links show "Link unavailable" (HTTP 403).</p>
+
+<h2 id="smb">4. SMB</h2>
+<h3>Use files that live on a NAS or another PC (client)</h3>
+<div class="win"><p><b>Recommended on Windows:</b> add the share as a UNC path. Windows handles passwords, SMB3 and signing for you.</p>
+<div class="cmd"><pre data-t="npm run add -- &quot;\\{{host}}\{{share}}&quot;"></pre></div>
+<p>If Windows asks for a login, connect once in Explorer and tick "Remember my credentials", or run (the password stays in Windows' credential store):</p>
+<div class="cmd"><pre data-t="net use \\{{host}}\{{share}} /user:USERNAME * /persistent:yes"></pre></div>
+<p class="note warn">Do not type a password on the <code>net use</code> command line itself; it would be visible in process lists and shell history. The <code>*</code> makes Windows prompt for it.</p></div>
+<div class="lin"><p><b>Recommended on Linux:</b> mount the share, then add the mount point as a local folder.</p>
+<div class="cmd"><pre data-t="sudo apt install cifs-utils
+sudo mkdir -p /mnt/nas
+sudo mount -t cifs //{{host}}/{{share}} /mnt/nas -o ro,username=USERNAME,uid=$(id -u)
+npm run add -- &quot;/mnt/nas&quot;"></pre></div>
+<p>To keep it after reboots, put a credentials file (<code>chmod 600</code>) and a line in <code>/etc/fstab</code>; see <code>docs/SMB.md</code>.</p></div>
+<p>There is also a built-in SMB client (<a href="/admin">/admin</a> → Add folders → SMB tab). It speaks SMB 2.0.2/2.1 only; it cannot do SMB3 signing or encryption, so use it for NAS boxes that allow SMB2, and prefer the UNC/mount routes otherwise. Passwords you enter are encrypted on disk and never returned by the API.</p>
+
+<h3>Share your libraries over SMB (server)</h3>
+<p>Node can't be a good SMB server, so StreamNest asks your OS to share the folders read-only:</p>
+<div class="cmd"><pre data-t="npm run smb:share"></pre></div>
+<div class="win"><p>That prints one <code>New-SmbShare … -ReadAccess</code> command per library. To run them, open an <b>Administrator</b> PowerShell and use <code>npm run smb:share -- --apply</code>. On another Windows PC: Explorer → <i>Map network drive</i> → <code>\\this-pc\Share</code>.</p></div>
+<div class="lin"><p>That prints a read-only Samba block for each library. Apply it for you with <code>npm run smb:share -- --user {{user}} --apply</code> (uses sudo), then set the SMB password: <code>sudo smbpasswd -a {{user}}</code>.</p></div>
+<p>On Android use VLC → Local network → add SMB, or CX File Explorer → Network → SMB.</p>
+
+<h2 id="ftp">5. FTP</h2>
+<h3>Use files on an FTP server (client)</h3>
+<p><a href="/admin">/admin</a> → Add folders → <b>FTP</b> tab: host, port, user, password, security (FTP, explicit FTPS, implicit FTPS) and base path. Press <b>Test connection</b> first. Seeking works (FTP <code>REST</code>), with a small connection pool per library.</p>
+<h3>Share your libraries over FTP (built-in server, off by default)</h3>
+<p>In <a href="/admin">/admin</a> → FTP server: set a username and password, choose a port, and enable. It is always read-only. Then connect from any FTP app to <code>ftp://&lt;this-pc-ip&gt;:{{ftpport}}</code>.</p>
+<p>Open the firewall for the control port <b>and</b> the passive port range (default 40000–40100):</p>
+<div class="win"><div class="cmd"><pre data-t="New-NetFirewallRule -DisplayName &quot;StreamNest FTP&quot; -Direction Inbound -Protocol TCP -LocalPort {{ftpport}},40000-40100 -Action Allow -Profile Private"></pre></div><p class="note">Run in an Administrator PowerShell. <code>-Profile Private</code> keeps it off public networks.</p></div>
+<div class="lin"><div class="cmd"><pre data-t="# ufw
+sudo ufw allow from 192.168.0.0/16 to any port {{ftpport}},40000:40100 proto tcp
+# firewalld (Fedora)
+sudo firewall-cmd --add-port={{ftpport}}/tcp --add-port=40000-40100/tcp --permanent &amp;&amp; sudo firewall-cmd --reload"></pre></div></div>
+<p class="note warn">Plain FTP sends passwords unencrypted. Use it on your home network only; never forward these ports to the internet.</p>
+
+<h2 id="online">6. Online mode (share outside your home)</h2>
+<p>Needs <a href="https://github.com/cloudflare/cloudflared/releases">cloudflared</a> installed and an admin password (StreamNest refuses to go online without one).</p>
+<div class="win"><div class="cmd"><pre data-t="winget install Cloudflare.cloudflared
+npm start -- online"></pre></div></div>
+<div class="lin"><div class="cmd"><pre data-t="./start-linux.sh online"></pre></div></div>
+<p>The terminal prints a <code>https://….trycloudflare.com</code> address. Share links then include an online version (<b>Copy online link</b>).</p>
+</main>
+<div id="toast" role="status"></div>
+<script>
+"use strict";
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var pres = Array.prototype.slice.call(document.querySelectorAll("pre[data-t]"));
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function vals() {
+    var v = function (id) { return $(id).value.trim(); };
+    var win = document.body.classList.contains("win");
+    var p = v("vPath"), p2 = v("vPath2");
+    var conv = function (x) { return win ? x.replace(/\//g, "\\") : x; };
+    return { path: p, path2: p2, host: v("vHost"), share: v("vShare"), user: v("vUser"), ftpport: v("vFtpPort"), port: v("vPort"), winProject: "C:\\Users\\you\\streamnest", conv: conv };
+  }
+  function render() {
+    var d = vals();
+    pres.forEach(function (pre) {
+      var t = pre.getAttribute("data-t").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<");
+      t = t.replace(/\{\{(\w+)\}\}/g, function (_, k) { return d[k] !== undefined ? d[k] : ""; });
+      pre.textContent = t;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("p code, li code"), function (c) {
+      if (!c.dataset.t) c.dataset.t = c.textContent;
+      c.textContent = c.dataset.t.replace(/\{\{(\w+)\}\}/g, function (_, k) { return d[k] !== undefined ? d[k] : ""; });
+    });
+  }
+  function toast(m) { var t = $("toast"); t.textContent = m; t.style.opacity = 1; clearTimeout(t.h); t.h = setTimeout(function () { t.style.opacity = 0; }, 1800); }
+  function copy(text, pre) {
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch (e) {} ta.remove();
+      if (ok) toast("Copied"); else { var r = document.createRange(); r.selectNodeContents(pre); var s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Press Ctrl+C to copy"); }
+    }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { toast("Copied"); }, fallback); else fallback();
+  }
+  pres.forEach(function (pre) {
+    var b = document.createElement("button"); b.textContent = "Copy"; b.type = "button";
+    b.onclick = function () { copy(pre.textContent, pre); };
+    pre.parentNode.appendChild(b);
+  });
+  function setOS(os) {
+    document.body.className = os;
+    $("osWin").classList.toggle("on", os === "win"); $("osLin").classList.toggle("on", os === "lin");
+    try { localStorage.setItem("sn-os", os); } catch (e) {}
+    var wp = $("vPath"); if (os === "lin" && /^[A-Za-z]:/.test(wp.value)) { wp.value = "/mnt/hdd/Movies"; $("vPath2").value = "/mnt/hdd/Music"; }
+    if (os === "win" && wp.value.charAt(0) === "/") { wp.value = "D:/Movies"; $("vPath2").value = "E:/Music"; }
+    render();
+  }
+  $("osWin").onclick = function () { setOS("win"); };
+  $("osLin").onclick = function () { setOS("lin"); };
+  Array.prototype.forEach.call(document.querySelectorAll(".vars input"), function (i) { i.addEventListener("input", render); });
+  var saved = null; try { saved = localStorage.getItem("sn-os"); } catch (e) {}
+  var guess = saved || (/Win/i.test(navigator.platform) ? "win" : "lin");
+  setOS(guess);
+})();
+</script>
+</body>
+</html>
